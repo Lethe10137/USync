@@ -10,7 +10,7 @@ use std::{collections::BTreeMap, thread};
 
 const FILESIZE: usize = 32 * 1024 * 1024;
 const PACKET_SIZE: u16 = 1450;
-const LOSS_RATE: f64 = 0.2;
+const LOSS_RATE: f64 = 0.01;
 
 //nix supports iovec!
 
@@ -65,8 +65,10 @@ fn reciever(mut decoder: Decoder, network_recieve: Receiver<Packet>) {
     // Perform the decoding
     let mut result = None;
     let mut packets_cnt = 0;
+    let mut bytes_cnt = 0;
     while let Ok(packet) = network_recieve.recv() {
         packets_cnt += 1;
+        bytes_cnt += packet.len();
         result = decoder.decode(EncodingPacket::deserialize(packet.as_slice()));
         if result.is_some() {
             break;
@@ -74,8 +76,7 @@ fn reciever(mut decoder: Decoder, network_recieve: Receiver<Packet>) {
     }
     println!(
         "Receives Finished, total {} pkts, {} Bytes",
-        packets_cnt,
-        packets_cnt * PACKET_SIZE as usize
+        packets_cnt, bytes_cnt
     );
 
     if let Some(result) = result {
@@ -104,7 +105,7 @@ fn main() {
     // The ObjectTransmissionInformation configuration should be transmitted over a reliable
     // channel
     let decoder = Decoder::new(encoder.get_config());
-
+    dbg!(encoder.get_config());
     thread::scope(|s| {
         s.spawn(|| sender(encoder, sending_packet, receiving_stop));
 
