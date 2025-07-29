@@ -1,9 +1,8 @@
 pub const VERSION: u8 = 1;
 
+pub const CHUNK_SIZE: usize = 1024 * 1024 * 32;
 pub const MTU: usize = 1490;
-
-// Packet types
-pub const DATA_PACKET: u8 = 1;
-pub const INIT_PACKET: u8 = 2;
-pub const TICKET_PACKET: u8 = 3;
-pub const FINISH_PACKET: u8 = 4;
+pub const DEFAULT_FRAME_LEN: usize = 1456;
+pub const PUB_KEY_LENGTH: usize = 32;
+pub const PRI_KEY_LENGTH: usize = 32;
+pub const SIGNATURE_LENGTH: usize = 32;
