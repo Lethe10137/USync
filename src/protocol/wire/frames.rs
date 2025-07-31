@@ -1,21 +1,34 @@
-use super::FrameType;
 use bytes::Bytes;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 use zerocopy::byteorder::{BigEndian, U32};
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
-pub const DATA_FRAME: FrameType = 0x01;
-pub const GET_CHUNK_FRAME: FrameType = 0x02;
-pub const STOP_CHUNK_FRAME: FrameType = 0x03;
-pub const RATE_LIMIT_FRAME: FrameType = 0x04;
+use super::{Frame, SpecificFrameHeader};
 
-use crate::protocol::packets::{Frame, SpecificFrameHeader};
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, IntoPrimitive, TryFromPrimitive)]
+pub enum FrameType {
+    Data = 0x01,
+    GetChunk = 0x02,
+    StopChunk = 0x03,
+    RateLimit = 0x04,
+}
+
+impl FrameType {
+    pub(super) fn try_parse<'a>(&self, data: &'a [u8]) -> Option<ParsedFrameVariant<'a>> {
+        match &self {
+            FrameType::Data => DataFrame::try_parse(data),
+            _ => todo!(),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum ParsedFrameVariant<'a> {
-    DataFrame(ParsedDataFrame<'a>),
-    GetChunkFrame(&'a [u8]),
-    StopChunkFrame(&'a [u8]),
-    RateLimitFrame(&'a [u8]),
+    Data(ParsedDataFrame<'a>),
+    GetChunk(&'a [u8]),
+    StopChunk(&'a [u8]),
+    RateLimit(&'a [u8]),
 }
 
 #[repr(C)]
@@ -28,7 +41,7 @@ pub struct DataFrameHeader {
 
 impl SpecificFrameHeader for DataFrameHeader {
     fn get_frame_type(&self) -> FrameType {
-        DATA_FRAME
+        FrameType::Data
     }
 }
 
@@ -60,7 +73,7 @@ impl DataFrame {
 impl Frame for DataFrame {
     type Header = DataFrameHeader;
 
-    fn header<'a>(&'a self) -> &'a Self::Header {
+    fn header(&self) -> &Self::Header {
         &self.header
     }
     fn body_len(&self) -> usize {
@@ -71,7 +84,7 @@ impl Frame for DataFrame {
     }
     fn try_parse<'a>(data: &'a [u8]) -> Option<ParsedFrameVariant<'a>> {
         if let Ok((header, data)) = DataFrameHeader::read_from_prefix(data) {
-            Some(ParsedFrameVariant::DataFrame(ParsedDataFrame {
+            Some(ParsedFrameVariant::Data(ParsedDataFrame {
                 chunk_id: header.chunk_id.into(),
                 chunk_size: header.chunk_size.into(),
                 frame_offset: header.frame_offset.into(),
