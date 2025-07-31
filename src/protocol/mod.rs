@@ -1,2 +1,3 @@
 mod constants;
-pub mod packets;
+mod key_ring;
+pub mod wire;

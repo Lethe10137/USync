@@ -3,7 +3,6 @@ use rand::random_bool;
 use rand::Rng;
 use raptorq::{Decoder, Encoder, EncodingPacket};
 
-use blake3;
 use flume::{Receiver, Sender, bounded};
 use std::time::{Duration, Instant};
 use std::{collections::BTreeMap, thread};
@@ -74,10 +73,7 @@ fn reciever(mut decoder: Decoder, network_recieve: Receiver<Packet>) {
             break;
         }
     }
-    println!(
-        "Receives Finished, total {} pkts, {} Bytes",
-        packets_cnt, bytes_cnt
-    );
+    println!("Receives Finished, total {packets_cnt} pkts, {bytes_cnt} Bytes",);
 
     if let Some(result) = result {
         println!("Result Hash is {}", blake3::hash(result.as_slice()));
