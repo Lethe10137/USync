@@ -3,8 +3,10 @@ use super::frames::DataFrame;
 use super::verify::PacketVerificationData;
 use super::{Packet, SpecificPacketHeader};
 use crate::protocol::constants::CHUNK_SIZE;
+use crate::protocol::key_ring::KEY_RING;
 
 use bytes::Bytes;
+use ed25519_dalek::PUBLIC_KEY_LENGTH;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
@@ -97,3 +99,58 @@ impl Packet for DataPacket {
         super::verify::PacketVerifyType::CRC64
     }
 }
+
+#[repr(C)]
+#[derive(IntoBytes, FromBytes, Unaligned, Immutable, KnownLayout)]
+pub struct TicketPacketHeader {
+    pub pubkey: [u8; PUBLIC_KEY_LENGTH],
+}
+
+impl SpecificPacketHeader for TicketPacketHeader {
+    fn get_packet_type(&self) -> PacketType {
+        PacketType::Ticket
+    }
+}
+
+pub struct TicketPacket {
+    header: TicketPacketHeader,
+    rate_limit: Option<()>,
+    get_chunk: Vec<()>,
+    stop_chunk: Vec<()>,
+}
+
+impl TicketPacket {
+    pub fn new() -> Self {
+        let pubkey = KEY_RING
+            .get()
+            .map(|key_ring| key_ring.derive_public_key())
+            .flatten()
+            .expect("Failed to derive public key");
+        Self {
+            header: TicketPacketHeader { pubkey },
+            rate_limit: None,
+            get_chunk: vec![],
+            stop_chunk: vec![],
+        }
+    }
+}
+
+// impl Packet for DataPacket {
+//     type Header = DataPacketHeader;
+//     fn packet_type(&self) -> PacketType {
+//         PacketType::Data
+//     }
+//     fn get_header(&self) -> &Self::Header {
+//         &self.header
+//     }
+//     fn get_body(self) -> impl Iterator<Item = super::BuiltFrame> {
+//         let built = self.data.build();
+//         std::iter::once(built)
+//     }
+//     fn try_parse<'a>(data: &'a [u8]) -> Option<ParsedPacketVariant<'a>> {
+//         (data.is_empty()).then_some(ParsedPacketVariant::DataPacket())
+//     }
+//     fn verification_type() -> super::verify::PacketVerifyType {
+//         super::verify::PacketVerifyType::CRC64
+//     }
+// }

@@ -48,8 +48,12 @@ pub trait SpecificFrameHeader: RawParts {
 pub trait Frame: Sized {
     type Header: SpecificFrameHeader;
     fn header(&self) -> &Self::Header;
-    fn body_len(&self) -> usize;
-    fn take_body(self) -> Option<Bytes>;
+    fn body_len(&self) -> usize {
+        0
+    }
+    fn take_body(self) -> Option<Bytes> {
+        None
+    }
     fn try_parse<'a>(data: &'a [u8]) -> Option<ParsedFrameVariant<'a>>;
 }
 
