@@ -225,7 +225,12 @@ mod tests {
 
         use crate::protocol::wire::packets::DataPacket;
         let mock_data: Vec<u8> = vec![88; DEFAULT_FRAME_LEN];
-        let data_packet = DataPacket::new(19260817, 85213, mock_data.clone());
+        let data_packet = DataPacket::new(
+            19260817,
+            85213,
+            [7u8; TRANSMISSION_INFO_LENGTH],
+            mock_data.clone(),
+        );
         let built = data_packet.build();
 
         let total_packet = build_into_bytes(built);
@@ -243,7 +248,7 @@ mod tests {
         if let ParsedFrameVariant::Data(data_frame) = &parsed_packet.frames[0] {
             assert_eq!(19260817, data_frame.chunk_id);
             assert_eq!(85213, data_frame.frame_offset);
-            assert_eq!(CHUNK_SIZE as u32, data_frame.chunk_size);
+
             assert_eq!(mock_data, data_frame.data);
         } else {
             unreachable!()

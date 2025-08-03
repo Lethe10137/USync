@@ -1,0 +1,39 @@
+   Compiling usync v0.1.0 (/home/lethe/thu/working/udp_sender)
+warning: unused imports: `Decoder`, `EncodingPacket`, and `calculate_block_offsets`
+ --> src/bin/slice_raptorq.rs:3:5
+  |
+3 |     Decoder, Encoder, EncodingPacket, ObjectTransmissionInformation, calculate_block_offsets,
+  |     ^^^^^^^           ^^^^^^^^^^^^^^                                 ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `BLOCK_LEN`
+ --> src/bin/slice_raptorq.rs:6:20
+  |
+6 | use blake3::{self, BLOCK_LEN};
+  |                    ^^^^^^^^^
+
+warning: unused import: `zerocopy::IntoBytes`
+ --> src/bin/slice_raptorq.rs:7:5
+  |
+7 | use zerocopy::IntoBytes;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: variable `k` is assigned to, but never used
+  --> src/bin/slice_raptorq.rs:31:13
+   |
+31 |     let mut k = 0;
+   |             ^
+   |
+   = note: consider using `_k` instead
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: `usync` (bin "slice_raptorq") generated 4 warnings (run `cargo fix --bin "slice_raptorq"` to apply 3 suggestions)
+    Finished `release` profile [optimized] target(s) in 0.25s
+     Running `target/release/slice_raptorq`
+[src/bin/slice_raptorq.rs:62:5] hash1 = Hash(
+    "a5a7d35b3354bf6d8f3eb5b2064106f6dfa9565883d8961f6e6daa6b996060c9",
+)
+[src/bin/slice_raptorq.rs:62:5] hash2 = Hash(
+    "a5a7d35b3354bf6d8f3eb5b2064106f6dfa9565883d8961f6e6daa6b996060c9",
+)

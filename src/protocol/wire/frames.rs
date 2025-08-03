@@ -3,6 +3,8 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use zerocopy::byteorder::{BigEndian, U32};
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
+use crate::protocol::constants::TRANSMISSION_INFO_LENGTH;
+
 use super::{Frame, SpecificFrameHeader};
 
 #[repr(u8)]
@@ -34,8 +36,8 @@ pub enum ParsedFrameVariant<'a> {
 #[derive(IntoBytes, FromBytes, Unaligned, Immutable, KnownLayout)]
 pub struct DataFrameHeader {
     pub chunk_id: U32<BigEndian>,
-    pub chunk_size: U32<BigEndian>,
     pub frame_offset: U32<BigEndian>,
+    pub transmission_info: [u8; TRANSMISSION_INFO_LENGTH],
 }
 
 impl SpecificFrameHeader for DataFrameHeader {
@@ -51,18 +53,23 @@ pub struct DataFrame {
 #[derive(Debug)]
 pub struct ParsedDataFrame<'a> {
     pub chunk_id: u32,
-    pub chunk_size: u32,
     pub frame_offset: u32,
+    pub transmission_info: [u8; TRANSMISSION_INFO_LENGTH],
     pub data: &'a [u8],
 }
 
 impl DataFrame {
-    pub fn new(chunk_id: u32, chunk_size: u32, frame_offset: u32, data: Bytes) -> Self {
+    pub fn new(
+        chunk_id: u32,
+        frame_offset: u32,
+        transmission_info: [u8; TRANSMISSION_INFO_LENGTH],
+        data: Bytes,
+    ) -> Self {
         Self {
             header: DataFrameHeader {
                 chunk_id: chunk_id.into(),
-                chunk_size: chunk_size.into(),
                 frame_offset: frame_offset.into(),
+                transmission_info,
             },
             data,
         }
@@ -85,8 +92,8 @@ impl Frame for DataFrame {
         let (header, data) = DataFrameHeader::read_from_prefix(data).ok()?;
         ParsedFrameVariant::Data(ParsedDataFrame {
             chunk_id: header.chunk_id.into(),
-            chunk_size: header.chunk_size.into(),
             frame_offset: header.frame_offset.into(),
+            transmission_info: header.transmission_info,
             data,
         })
         .into()

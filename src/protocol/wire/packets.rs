@@ -4,7 +4,7 @@ use super::encoding::FrameExt;
 use super::frames::DataFrame;
 use super::verify::PacketVerificationData;
 use super::{Packet, SpecificPacketHeader};
-use crate::protocol::constants::{CHUNK_SIZE, PUB_KEY_LENGTH};
+use crate::protocol::constants::{PUB_KEY_LENGTH, TRANSMISSION_INFO_LENGTH};
 use crate::protocol::key_ring::KEY_RING;
 use crate::protocol::wire::frames::{GetChunkFrame, RateLimitFrame};
 use crate::protocol::wire::verify::PacketVerifyType;
@@ -88,10 +88,15 @@ pub struct DataPacket {
 }
 
 impl DataPacket {
-    pub fn new(chunk_id: u32, offset: u32, data: Vec<u8>) -> Self {
+    pub fn new(
+        chunk_id: u32,
+        offset: u32,
+        transmission_info: [u8; TRANSMISSION_INFO_LENGTH],
+        data: Vec<u8>,
+    ) -> Self {
         Self {
             header: DataPacketHeader {},
-            data: DataFrame::new(chunk_id, CHUNK_SIZE as u32, offset, Bytes::from(data)),
+            data: DataFrame::new(chunk_id, offset, transmission_info, Bytes::from(data)),
         }
     }
 }

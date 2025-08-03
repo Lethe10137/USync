@@ -465,8 +465,7 @@ dependencies = [
 [[package]]
 name = "raptorq"
 version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90b1b1fad69672f0b901b5004863ea4307f03d168a3db5f2bcba4d3dfed88e97"
+source = "git+https://github.com/Lethe10137/raptorq.git?branch=master#44b18bbca9972578555ba82b942aa5163c0ba712"
 
 [[package]]
 name = "rustc_version"
@@ -587,6 +586,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "tap"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+
+[[package]]
 name = "toml"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -669,6 +674,7 @@ dependencies = [
  "num_enum",
  "rand",
  "raptorq",
+ "tap",
  "toml",
  "zerocopy",
 ]
