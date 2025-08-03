@@ -1,6 +1,7 @@
 use blake3::KEY_LEN;
 use ed25519_dalek::ed25519::signature::Signer;
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, Signature, SigningKey, VerifyingKey};
+use log::warn;
 
 use std::collections::HashSet;
 use std::sync::OnceLock;
@@ -64,7 +65,10 @@ impl KeyRing {
 
 // Panic on second call!
 pub fn init(public_keys: Vec<String>, private_key: Option<String>) {
-    KEY_RING
+    if KEY_RING
         .set(KeyRing::new(public_keys, private_key))
-        .expect("Second call of initialize");
+        .is_err()
+    {
+        warn!("Second initialization!")
+    }
 }

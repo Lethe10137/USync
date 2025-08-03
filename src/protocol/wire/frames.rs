@@ -17,7 +17,8 @@ impl FrameType {
     pub(super) fn try_parse<'a>(&self, data: &'a [u8]) -> Option<ParsedFrameVariant<'a>> {
         match &self {
             FrameType::Data => DataFrame::try_parse(data),
-            _ => todo!(),
+            FrameType::GetChunk => GetChunkFrame::try_parse(data),
+            FrameType::RateLimit => RateLimitFrame::try_parse(data),
         }
     }
 }
@@ -111,14 +112,13 @@ pub type PrasedGetChunkFrame = GetChunkFrameHeader;
 impl Frame for GetChunkFrame {
     type Header = GetChunkFrameHeader;
     fn header(&self) -> &Self::Header {
-        &self
+        self
     }
     fn try_parse<'a>(data: &'a [u8]) -> Option<ParsedFrameVariant<'a>> {
         let (header, remain) = GetChunkFrameHeader::read_from_prefix(data).ok()?;
-        if remain.len() != 0 {
-            return None;
-        }
-        ParsedFrameVariant::GetChunk(header).into()
+        remain
+            .is_empty()
+            .then_some(ParsedFrameVariant::GetChunk(header))
     }
 }
 
@@ -139,13 +139,13 @@ pub type ParsedRateLimitFrame = RateLimitFrame;
 impl Frame for RateLimitFrame {
     type Header = RateLimitFrameHeader;
     fn header(&self) -> &Self::Header {
-        &self
+        self
     }
     fn try_parse<'a>(data: &'a [u8]) -> Option<ParsedFrameVariant<'a>> {
         let (header, remain) = RateLimitFrameHeader::read_from_prefix(data).ok()?;
-        if remain.len() != 0 {
-            return None;
-        }
-        ParsedFrameVariant::RateLimit(header).into()
+
+        remain
+            .is_empty()
+            .then_some(ParsedFrameVariant::RateLimit(header))
     }
 }

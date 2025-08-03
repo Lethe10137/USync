@@ -665,6 +665,7 @@ dependencies = [
  "ed25519-dalek",
  "flume",
  "hex",
+ "log",
  "num_enum",
  "rand",
  "raptorq",

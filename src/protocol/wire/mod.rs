@@ -64,10 +64,10 @@ pub struct BuiltFrame {
 
 pub trait Packet: Sized {
     type Header: SpecificPacketHeader;
+    const PACKET_TYPE: PacketType;
+    const PACKET_VERIFICATION_TYPE: PacketVerifyType;
 
-    fn packet_type(&self) -> PacketType;
     fn get_header(&self) -> &Self::Header;
     fn get_body(self) -> impl Iterator<Item = BuiltFrame>;
     fn try_parse<'a>(data: &'a [u8]) -> Option<ParsedPacketVariant<'a>>;
-    fn verification_type() -> PacketVerifyType;
 }

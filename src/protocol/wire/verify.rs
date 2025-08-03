@@ -4,7 +4,10 @@ use bytes::Bytes;
 use crc::{CRC_64_ECMA_182, Crc, Digest};
 use ed25519_dalek::{Signature, VerifyingKey};
 
-use crate::protocol::{constants::MTU, key_ring::KeyRing};
+use crate::protocol::{
+    constants::{MTU, PUB_KEY_LENGTH},
+    key_ring::KeyRing,
+};
 
 pub fn check_crc64(content: &[u8]) -> u64 {
     Crc::<u64>::new(&CRC_64_ECMA_182).checksum(content)
@@ -35,7 +38,7 @@ pub enum PacketVerificationData<'a> {
     },
     Ed25519 {
         pkt: &'a [u8],
-        pub_key: &'a [u8],
+        pub_key: &'a [u8; PUB_KEY_LENGTH],
         signature: &'a [u8],
     },
 }

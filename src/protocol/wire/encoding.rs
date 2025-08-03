@@ -23,8 +23,7 @@ pub(super) trait PacketExt: Packet {
             CommonPacketHeader::raw_len(),
             <Self as Packet>::Header::raw_len(),
         );
-
-        let packet_type = self.packet_type();
+        let packet_type = Self::PACKET_TYPE;
         let dummy_common_header = Bytes::new();
         let mut body_length: usize = 0;
         let mut header = BytesMut::with_capacity(header_length.1);
@@ -56,7 +55,7 @@ pub(super) trait PacketExt: Packet {
 
         // CRC64 or ED25519
         let signature = KEY_RING.get().unwrap().sign(
-            Self::verification_type(),
+            Self::PACKET_VERIFICATION_TYPE,
             result.iter().map(|pkt| pkt.as_bytes()),
         );
         result.push(signature);
@@ -194,13 +193,27 @@ pub fn parse_packet<'a>(packet: &'a [u8]) -> Result<ParsedPacket<'a>, ParseError
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::protocol::constants::*;
     use crate::protocol::key_ring::init;
-    use crate::protocol::wire::frames::ParsedFrameVariant;
+    use crate::protocol::wire::frames::{GetChunkFrameHeader, ParsedFrameVariant};
+    use crate::protocol::wire::packets::current_timestamp_ms;
     use bytes::BytesMut;
 
+    fn build_into_bytes(vec: Vec<Bytes>) -> Bytes {
+        let mut total_packet = BytesMut::new();
+        for item in vec.iter() {
+            total_packet.extend_from_slice(&item);
+        }
+        total_packet.freeze()
+    }
+
     fn mock_init() {
+        if KEY_RING.get().is_some() {
+            return;
+        }
         const PRIKEY: &str = "fd9d88daa555f6bad0bbece8e0e4fffef190723e16aa9dfe0d18c8e4ff7a6eda";
         const PUBKEY: &str = "4ae6629e09372dd96196f35c032fd1c5da3dfe01ca40ecf8b268d78d741e9d1c";
         init(vec![String::from(PUBKEY)], Some(String::from(PRIKEY)));
@@ -215,10 +228,7 @@ mod tests {
         let data_packet = DataPacket::new(19260817, 85213, mock_data.clone());
         let built = data_packet.build();
 
-        let mut total_packet = BytesMut::new();
-        for item in built.iter() {
-            total_packet.extend_from_slice(&item);
-        }
+        let total_packet = build_into_bytes(built);
 
         assert_eq!(
             DEFAULT_FRAME_LEN % 16,
@@ -226,7 +236,6 @@ mod tests {
             "Default frame len should be 16-aligned."
         );
 
-        let total_packet = total_packet.freeze();
         assert!(total_packet.len() <= MTU);
 
         let parsed_packet = parse_packet(&total_packet).unwrap();
@@ -240,5 +249,71 @@ mod tests {
             unreachable!()
         }
         assert_eq!(parsed_packet.verification_field.len(), 8, "Should be CRC64");
+    }
+
+    #[test]
+    fn build_parse_ticket_packet() {
+        mock_init();
+        use crate::protocol::wire::packets::TicketPacket;
+
+        let start_time = current_timestamp_ms();
+
+        let packet = TicketPacket::new()
+            .set_rate_limit(80000)
+            .set_get_chunk(8, 75, 400) // Should be shadowed!
+            .set_get_chunk(17, 2334, 800)
+            .set_get_chunk(8, 234, 600)
+            .build();
+
+        let total_packet = build_into_bytes(packet);
+        assert!(total_packet.len() <= MTU);
+
+        let parsed_packet = parse_packet(&total_packet).unwrap();
+
+        let current_time = current_timestamp_ms();
+
+        if let ParsedPacketVariant::TicketPacket {
+            pub_key,
+            timestamp_ms,
+        } = parsed_packet.specific_packet_header
+        {
+            assert_eq!(
+                *pub_key,
+                KEY_RING.get().unwrap().derive_public_key().unwrap()
+            );
+            assert!(start_time <= timestamp_ms && timestamp_ms <= current_time);
+        } else {
+            unreachable!();
+        }
+
+        let mut expected = HashMap::new();
+        expected.insert(8, (234, 600));
+        expected.insert(17, (2334, 800));
+        let mut rate_limit = None;
+
+        for frame in parsed_packet.frames {
+            match frame {
+                ParsedFrameVariant::RateLimit(header) => {
+                    assert!(
+                        rate_limit
+                            .replace(u32::from(header.desired_max_kbps))
+                            .is_none()
+                    )
+                }
+                ParsedFrameVariant::GetChunk(GetChunkFrameHeader {
+                    chunk_id,
+                    max_received_offset,
+                    receive_window_frames,
+                }) => {
+                    let expected_entry = expected.remove(&u32::from(chunk_id)).unwrap();
+                    assert_eq!(expected_entry.0, u32::from(max_received_offset));
+                    assert_eq!(expected_entry.1, u32::from(receive_window_frames));
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        assert_eq!(expected.len(), 0);
+        assert_eq!(rate_limit, Some(80000));
     }
 }
