@@ -5,6 +5,11 @@ const FILESIZE: usize = 16 * 1024 * 1024 + 7;
 const PACKET_SIZE: u16 = 1500;
 
 pub fn main() {
+    debug_assert!(
+        false,
+        "Please run in release mod, since raptorq will be far more faster."
+    );
+
     let mut data: Vec<u8> = vec![0; FILESIZE];
     for byte in data.iter_mut() {
         *byte = rand::rng().random();

@@ -4,7 +4,7 @@ use super::encoding::FrameExt;
 use super::frames::DataFrame;
 use super::verify::PacketVerificationData;
 use super::{Packet, SpecificPacketHeader};
-use crate::protocol::constants::{PUB_KEY_LENGTH, TRANSMISSION_INFO_LENGTH};
+use crate::constants::{PUB_KEY_LENGTH, TRANSMISSION_INFO_LENGTH};
 use crate::protocol::key_ring::KEY_RING;
 use crate::protocol::wire::frames::{GetChunkFrame, RateLimitFrame};
 use crate::protocol::wire::verify::PacketVerifyType;

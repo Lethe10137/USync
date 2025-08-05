@@ -82,6 +82,11 @@ fn reciever(mut decoder: Decoder, network_recieve: Receiver<Packet>) {
     }
 }
 fn main() {
+    debug_assert!(
+        false,
+        "Please run in release mod, since raptorq will be far more faster."
+    );
+
     // Generate some random data to send
     let mut data: Vec<u8> = vec![0; FILESIZE];
     for byte in data.iter_mut() {

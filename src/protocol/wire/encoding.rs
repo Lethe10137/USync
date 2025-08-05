@@ -1,6 +1,6 @@
 use bytes::{Buf, Bytes, BytesMut};
 
-use crate::protocol::constants::VERSION;
+use crate::constants::VERSION;
 use crate::protocol::key_ring::KEY_RING;
 
 use crate::protocol::wire::{
@@ -196,7 +196,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::protocol::constants::*;
+    use crate::constants::*;
     use crate::protocol::key_ring::init;
     use crate::protocol::wire::frames::{GetChunkFrameHeader, ParsedFrameVariant};
     use crate::protocol::wire::packets::current_timestamp_ms;

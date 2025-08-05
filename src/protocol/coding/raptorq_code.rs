@@ -1,7 +1,7 @@
-use crate::protocol::{coding::FrameReceiver, constants::DEFAULT_FRAME_LEN};
-
 use super::FrameSender;
-use crate::protocol::constants::TRANSMISSION_INFO_LENGTH as RAPTORQ_TRANSMISSION_INFO_LENGTH;
+use crate::constants::DEFAULT_FRAME_LEN;
+use crate::constants::TRANSMISSION_INFO_LENGTH as RAPTORQ_TRANSMISSION_INFO_LENGTH;
+use crate::protocol::coding::FrameReceiver;
 use raptorq::{Decoder, Encoder, EncodingPacket, ObjectTransmissionInformation};
 
 use std::collections::VecDeque;
@@ -89,12 +89,10 @@ mod test {
     const CHUNK_SIZE: usize = 1048576;
     use rand::Rng;
 
-    use crate::protocol::{
-        coding::{
-            FrameReceiver, FrameSender,
-            raptorq_code::{RaptorqReceiver, RaptorqSender},
-        },
-        constants::MTU,
+    use crate::constants::MTU;
+    use crate::protocol::coding::{
+        FrameReceiver, FrameSender,
+        raptorq_code::{RaptorqReceiver, RaptorqSender},
     };
 
     fn generate_random(size: usize) -> Vec<u8> {

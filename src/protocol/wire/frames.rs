@@ -3,7 +3,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use zerocopy::byteorder::{BigEndian, U32};
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
-use crate::protocol::constants::TRANSMISSION_INFO_LENGTH;
+use crate::constants::TRANSMISSION_INFO_LENGTH;
 
 use super::{Frame, SpecificFrameHeader};
 

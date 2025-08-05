@@ -4,11 +4,9 @@ use bytes::Bytes;
 use crc::{CRC_64_ECMA_182, Crc, Digest};
 use ed25519_dalek::{Signature, VerifyingKey};
 
-use crate::protocol::{
-    constants::{MTU, PUB_KEY_LENGTH},
-    key_ring::KeyRing,
-};
+use crate::protocol::key_ring::KeyRing;
 
+use crate::constants::{MTU, PUB_KEY_LENGTH};
 pub fn check_crc64(content: &[u8]) -> u64 {
     Crc::<u64>::new(&CRC_64_ECMA_182).checksum(content)
 }
