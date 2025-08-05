@@ -2,6 +2,9 @@
 name = "usync"
 version = "0.1.0"
 edition = "2024"
+description = "Using Raptorq code to transmit large file over UDP through unreliable network."
+license = "MIT"
+authors = ["Lethe Lee <lichenghao_thu@foxmail.com>"]
 
 [dependencies]
 blake3 = "1.8.2"
