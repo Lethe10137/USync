@@ -25,6 +25,8 @@ memmap2 = "0.9.7"
 page_size = "0.6.0"
 clap = { version = "4.5.42", features = ["derive"] }
 serde = { version = "1.0.219", features = ["derive"] }
+directories = "6.0.0"
+anyhow = "1.0.98"
 
 
 [dev-dependencies]

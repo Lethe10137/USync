@@ -137,6 +137,12 @@ pub struct TicketPacket {
     get_chunk: HashMap<u32, GetChunkFrame>,
 }
 
+impl Default for TicketPacket {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TicketPacket {
     pub fn new() -> Self {
         let pubkey = KEY_RING

@@ -1,19 +1,9 @@
-#![allow(dead_code)]
-#![warn(unused_imports)]
-
-mod constants;
-mod file;
-mod plan;
-mod protocol;
-
 use clap::Parser;
-use file::file_len;
-use std::io;
 use std::path::PathBuf;
 use zerocopy::IntoBytes;
 
-use crate::file::mmap_segment;
-use crate::plan::{FileChunk, FileConfig, make_plan};
+use usync::file::{mmap_segment, sanity_check};
+use usync::plan::{FileChunk, FileConfig, make_plan};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A simple CLI program to build transmission plan.", long_about = None)]
@@ -23,33 +13,15 @@ struct Args {
     file: PathBuf,
 }
 
-fn main() -> io::Result<()> {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    // Check if the path exists and is a file.
-    if !args.file.exists() {
-        eprintln!("Error: The specified file does not exist.");
-        std::process::exit(1);
-    }
+    let (total_length, file_name) = sanity_check(&args.file)?;
 
-    if !args.file.is_file() {
-        eprintln!("Error: The specified path is not a file.");
-        std::process::exit(1);
-    }
-
-    let file_name = args
-        .file
-        .file_name()
-        .expect("Failed to get file name")
-        .to_str()
-        .expect("Non UTF-8 File name provided")
-        .to_string();
-
-    let total_length = file_len(&args.file)?;
     let mut total_hasher = blake3::Hasher::new();
     let mut chunks = vec![];
 
-    for (chunk_id, (offset, length)) in make_plan(total_length as usize).enumerate() {
+    for (chunk_id, (offset, length)) in make_plan(total_length).enumerate() {
         let chunk = mmap_segment(&args.file, offset, length)?;
         let chunk_bytes = chunk.as_bytes();
         assert_eq!(chunk_bytes.len(), length);
