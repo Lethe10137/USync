@@ -1,6 +1,8 @@
 use anyhow::anyhow;
 use clap::Parser;
 use directories::UserDirs;
+use humansize::{BINARY, format_size};
+use owo_colors::OwoColorize;
 use std::{fs, path::PathBuf};
 use zerocopy::IntoBytes;
 
@@ -26,27 +28,56 @@ fn check_chunks<'b>(path: &PathBuf, config: &'b FileConfig) -> Vec<&'b FileChunk
     for chunk in config.chunks.iter() {
         result.push(chunk);
 
-        print!(">>> Checking chunk {:04} ... ", chunk.chunk_id);
+        print!(
+            ">>> Checking chunk {:04}: ...",
+            chunk.chunk_id.bright_blue()
+        );
 
         let hash = match mmap_segment(path, chunk.offset, chunk.length) {
             Ok(chunk_data) => hex::encode(blake3::hash(chunk_data.as_bytes()).as_bytes()),
             Err(err) => {
-                println!("  Failed to read: {err:#}");
+                println!("\x1b[3D {}: {err:#}", "Failed to read".yellow());
                 continue;
             }
         };
 
         if hash.as_str() != chunk.hash {
             println!(
-                "  Hash check failed. Expected {}, actual {}",
-                chunk.hash, hash
+                "\x1b[3D {}. Expected {}, actual {}",
+                "Hash check failed".red(),
+                chunk.hash.yellow(),
+                hash.yellow()
             );
             continue;
         }
-        println!("  OK");
+        println!("\x1b[3D {}", "OK".green());
         result.pop();
     }
     result
+}
+
+fn check_file<'a>(
+    downloading_file: &PathBuf,
+    config: &'a FileConfig,
+) -> anyhow::Result<Vec<&'a FileChunk>> {
+    println!(
+        "{} chunks in total for file {}.",
+        config.chunks.len(),
+        downloading_file.display()
+    );
+
+    let need_to_download = check_chunks(downloading_file, config);
+    let download_size: usize = need_to_download.iter().map(|chunk| chunk.length).sum();
+
+    let print_config = BINARY.decimal_places(3).decimal_zeroes(3);
+    println!(
+        "Need to download {} / {} chunks which sized {} / {}.",
+        need_to_download.len().yellow(),
+        config.chunks.len().blue(),
+        format_size(download_size, print_config).yellow(),
+        format_size(config.total_length, print_config).blue(),
+    );
+    Ok(need_to_download)
 }
 
 fn main() -> anyhow::Result<()> {
@@ -71,10 +102,7 @@ fn main() -> anyhow::Result<()> {
     println!("Downloading file: {}", downloading_file.display());
 
     if check_file_exist(&downloading_file)? {
-        println!(
-            "{} already exists, start checking.",
-            downloading_file.display(),
-        );
+        println!("{} already exists.", downloading_file.display(),);
     } else {
         println!(
             "Created {} successfully as an empty file.",
@@ -82,14 +110,7 @@ fn main() -> anyhow::Result<()> {
         )
     }
 
-    println!(
-        "{} chunks in total for file {}.",
-        config.chunks.len(),
-        downloading_file.display()
-    );
-
-    let need_to_download = check_chunks(&downloading_file, &config);
-    println!("{} chunks needed to be downloaded", need_to_download.len());
+    let _need_to_download = check_file(&downloading_file, &config)?;
 
     Ok(())
 }
