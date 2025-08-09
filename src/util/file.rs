@@ -1,18 +1,58 @@
 use memmap2::{Mmap, MmapOptions};
 use std::fs::{File, OpenOptions};
-use std::io::Result;
+use std::io::{Error, ErrorKind, Result};
 use std::os::unix::fs::FileExt;
 use std::path::Path;
 
-pub fn file_len<P: AsRef<Path>>(path: P) -> Result<u64> {
-    Ok(std::fs::metadata(path)?.len())
+pub fn sanity_check<P: AsRef<Path>>(path: P) -> Result<(u64, String)> {
+    let length = std::fs::metadata(&path)?.len();
+    let is_file = std::fs::metadata(&path)?.is_file();
+    let file_name = is_file
+        .then_some(path.as_ref().file_name())
+        .flatten()
+        .ok_or(Error::new(
+            ErrorKind::IsADirectory,
+            "A normal file is expected.",
+        ))?
+        .to_os_string()
+        .into_string()
+        .expect("File name is not valid UTF-8.");
+
+    Ok((length, file_name))
+}
+
+pub fn check_file_exist<P: AsRef<Path>>(path: P) -> Result<bool> {
+    let path = path.as_ref();
+    if path.exists() {
+        if path.is_file() {
+            return Ok(true);
+        } else {
+            return Err(Error::other("The path to downloading file is not a file!"));
+        }
+    }
+    File::create(path)?;
+    Ok(false)
 }
 
 pub fn mmap_segment<P: AsRef<Path>>(path: P, offset: u64, length: usize) -> Result<Mmap> {
     let file = File::open(path)?;
-
+    let metadata = file.metadata()?;
+    let file_size = metadata.len();
     let page_size = page_size::get() as u64;
-    assert_eq!(offset % page_size, 0, "Unaligned offset!");
+    if offset % page_size != 0 {
+        return Err(Error::new(ErrorKind::InvalidInput, "Unaligned offset!"));
+    }
+
+    let end = offset
+        .checked_add(length as u64)
+        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "Offset + length overflow"))?;
+
+    if end > file_size {
+        return Err(Error::new(
+            ErrorKind::UnexpectedEof,
+            format!("Requested mapping [{offset}..{end}) exceeds file size ({file_size})"),
+        ));
+    }
 
     let mmap = unsafe { MmapOptions::new().offset(offset).len(length).map(&file)? };
 
@@ -66,7 +106,7 @@ mod tests {
         write_at(&file_path, offset2, &block2)?;
 
         // Logical length of file = 1 GiB
-        let file_length = file_len(&file_path)?;
+        let file_length = std::fs::metadata(&file_path)?.len();
         assert_eq!(file_length, file_size);
         println!("Logical file length: {} bytes", file_length);
 

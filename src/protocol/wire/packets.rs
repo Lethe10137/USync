@@ -84,7 +84,7 @@ impl SpecificPacketHeader for DataPacketHeader {
 
 pub struct DataPacket {
     header: DataPacketHeader,
-    data: DataFrame,
+    data: DataFrame<TRANSMISSION_INFO_LENGTH>, // DataFrame<12> for raptorq
 }
 
 impl DataPacket {
@@ -135,6 +135,12 @@ pub struct TicketPacket {
     header: TicketPacketHeader,
     rate_limit: Option<RateLimitFrame>,
     get_chunk: HashMap<u32, GetChunkFrame>,
+}
+
+impl Default for TicketPacket {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TicketPacket {

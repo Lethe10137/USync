@@ -18,7 +18,7 @@ pub enum FrameType {
 impl FrameType {
     pub(super) fn try_parse<'a>(&self, data: &'a [u8]) -> Option<ParsedFrameVariant<'a>> {
         match &self {
-            FrameType::Data => DataFrame::try_parse(data),
+            FrameType::Data => DataFrame::<TRANSMISSION_INFO_LENGTH>::try_parse(data),
             FrameType::GetChunk => GetChunkFrame::try_parse(data),
             FrameType::RateLimit => RateLimitFrame::try_parse(data),
         }
@@ -34,20 +34,20 @@ pub enum ParsedFrameVariant<'a> {
 
 #[repr(C)]
 #[derive(IntoBytes, FromBytes, Unaligned, Immutable, KnownLayout)]
-pub struct DataFrameHeader {
+pub struct DataFrameHeader<const INFO_LENGTH: usize> {
     pub chunk_id: U32<BigEndian>,
     pub frame_offset: U32<BigEndian>,
-    pub transmission_info: [u8; TRANSMISSION_INFO_LENGTH],
+    pub transmission_info: [u8; INFO_LENGTH],
 }
 
-impl SpecificFrameHeader for DataFrameHeader {
+impl<const INFO_LENGTH: usize> SpecificFrameHeader for DataFrameHeader<INFO_LENGTH> {
     fn get_frame_type(&self) -> FrameType {
         FrameType::Data
     }
 }
 
-pub struct DataFrame {
-    header: DataFrameHeader,
+pub struct DataFrame<const INFO_LENGTH: usize> {
+    header: DataFrameHeader<INFO_LENGTH>,
     data: Bytes,
 }
 #[derive(Debug)]
@@ -58,11 +58,11 @@ pub struct ParsedDataFrame<'a> {
     pub data: &'a [u8],
 }
 
-impl DataFrame {
+impl<const INFO_LENGTH: usize> DataFrame<INFO_LENGTH> {
     pub fn new(
         chunk_id: u32,
         frame_offset: u32,
-        transmission_info: [u8; TRANSMISSION_INFO_LENGTH],
+        transmission_info: [u8; INFO_LENGTH],
         data: Bytes,
     ) -> Self {
         Self {
@@ -76,8 +76,8 @@ impl DataFrame {
     }
 }
 
-impl Frame for DataFrame {
-    type Header = DataFrameHeader;
+impl<const INFO_LEN: usize> Frame for DataFrame<INFO_LEN> {
+    type Header = DataFrameHeader<INFO_LEN>;
 
     fn header(&self) -> &Self::Header {
         &self.header

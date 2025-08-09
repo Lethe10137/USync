@@ -10,4 +10,4 @@ pub trait FrameReceiver<const TRANSMISSION_INFO_LENGTH: usize>: Sized {
     fn expected_frame_id(&self) -> u32;
 }
 
-mod raptorq_code;
+pub mod raptorq_code;
