@@ -84,7 +84,7 @@ impl SpecificPacketHeader for DataPacketHeader {
 
 pub struct DataPacket {
     header: DataPacketHeader,
-    data: DataFrame,
+    data: DataFrame<TRANSMISSION_INFO_LENGTH>, // DataFrame<12> for raptorq
 }
 
 impl DataPacket {

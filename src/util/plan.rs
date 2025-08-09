@@ -46,7 +46,7 @@ pub fn make_plan(file_length: u64) -> impl Iterator<Item = (u64, usize)> {
 // .map(|(offset, len)| (offset as usize, len))
 #[cfg(test)]
 mod test {
-    use crate::plan::make_plan as make_plan_u64;
+    use crate::util::plan::make_plan as make_plan_u64;
     const M: usize = 1024 * 1024;
     const K: usize = 1024;
 

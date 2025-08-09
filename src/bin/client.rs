@@ -6,7 +6,7 @@ use owo_colors::OwoColorize;
 use std::{fs, path::PathBuf};
 use zerocopy::IntoBytes;
 
-use usync::{
+use usync::util::{
     file::{check_file_exist, mmap_segment},
     plan::{FileChunk, FileConfig},
 };

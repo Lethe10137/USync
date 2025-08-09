@@ -2,8 +2,8 @@ use clap::Parser;
 use std::path::PathBuf;
 use zerocopy::IntoBytes;
 
-use usync::file::{mmap_segment, sanity_check};
-use usync::plan::{FileChunk, FileConfig, make_plan};
+use usync::util::file::{mmap_segment, sanity_check};
+use usync::util::plan::{FileChunk, FileConfig, make_plan};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A simple CLI program to build transmission plan.", long_about = None)]
