@@ -14,7 +14,8 @@ pub struct RaptorqSender {
 }
 
 impl FrameSender<RAPTORQ_TRANSMISSION_INFO_LENGTH> for RaptorqSender {
-    fn init(chunk_data: &[u8], next_id: u32) -> Self {
+    fn init(chunk_data: impl AsRef<[u8]>, next_id: u32) -> Self {
+        let chunk_data: &[u8] = chunk_data.as_ref();
         let config = ObjectTransmissionInformation::with_defaults(
             chunk_data.len() as u64,
             DEFAULT_FRAME_LEN as u16,
@@ -30,7 +31,7 @@ impl FrameSender<RAPTORQ_TRANSMISSION_INFO_LENGTH> for RaptorqSender {
     }
 
     fn next_frame(&mut self) -> (u32, Vec<u8>) {
-        const BURST: usize = 32;
+        const BURST: usize = 16;
         if self.cache.is_empty() {
             let encoder_cnt = self.encoder.get_block_encoders().len();
 
@@ -85,23 +86,13 @@ impl FrameReceiver<RAPTORQ_TRANSMISSION_INFO_LENGTH> for RaptorqReceiver {
 
 #[cfg(test)]
 mod test {
-
     const CHUNK_SIZE: usize = 1048576;
-    use rand::Rng;
-
     use crate::constants::MTU;
     use crate::protocol::coding::{
         FrameReceiver, FrameSender,
         raptorq_code::{RaptorqReceiver, RaptorqSender},
     };
-
-    fn generate_random(size: usize) -> Vec<u8> {
-        let mut data: Vec<u8> = vec![0; size];
-        for byte in data.iter_mut() {
-            *byte = rand::rng().random();
-        }
-        data
-    }
+    use crate::util::generate_random;
 
     #[test]
     fn get_gen_frames() {

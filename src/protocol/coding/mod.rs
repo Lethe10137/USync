@@ -1,5 +1,5 @@
 pub trait FrameSender<const TRANSMISSION_INFO_LENGTH: usize> {
-    fn init(chunk_data: &[u8], next_id: u32) -> Self;
+    fn init(chunk_data: impl AsRef<[u8]>, next_id: u32) -> Self;
     fn next_frame(&mut self) -> (u32, Vec<u8>);
     fn get_trasmission_info(&self) -> [u8; TRANSMISSION_INFO_LENGTH];
 }

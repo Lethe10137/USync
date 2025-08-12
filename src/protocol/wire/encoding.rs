@@ -17,7 +17,7 @@ pub trait RawParts: IntoBytes + FromBytes + Unaligned + Sized + Immutable {
 }
 impl<T> RawParts for T where T: IntoBytes + FromBytes + Unaligned + Immutable {}
 
-pub(super) trait PacketExt: Packet {
+pub(crate) trait PacketExt: Packet {
     fn build(self) -> Vec<Bytes> {
         let header_length = (
             CommonPacketHeader::raw_len(),
@@ -92,11 +92,18 @@ pub(super) trait FrameExt: Frame {
 impl<T: Frame> FrameExt for T {}
 
 #[derive(Debug)]
-pub struct ParsedPacket<'a> {
-    pub common_packet_header: &'a CommonPacketHeader,
-    pub specific_packet_header: ParsedPacketVariant<'a>,
-    pub frames: Vec<ParsedFrameVariant<'a>>,
-    pub verification_field: &'a [u8],
+pub struct ParsedPacket<const INFO_LENGTH: usize> {
+    pub pkt: Bytes,
+    pub specific_packet_header: ParsedPacketVariant,
+    pub frames: Vec<ParsedFrameVariant<INFO_LENGTH>>,
+}
+
+impl<const INFO_LENGTH: usize> ParsedPacket<INFO_LENGTH> {
+    pub fn get_common_packet_header(&self) -> &CommonPacketHeader {
+        let (header, _remain) =
+            CommonPacketHeader::try_ref_from_prefix(self.pkt.as_bytes()).unwrap();
+        header
+    }
 }
 
 #[derive(Debug)]
@@ -112,12 +119,15 @@ pub enum ParseError {
     FailedToParseFrame,
 }
 
-fn parse_frame<'a>(mut remained_body: &'a [u8]) -> Result<Vec<ParsedFrameVariant<'a>>, ParseError> {
+fn parse_frame<const INFO_LENGTH: usize>(
+    mut remained_body: Bytes,
+) -> Result<Vec<ParsedFrameVariant<INFO_LENGTH>>, ParseError> {
     let mut frames = vec![];
 
     while !remained_body.is_empty() {
-        let (common_frame_header, _) = CommonFrameHeader::try_ref_from_prefix(remained_body)
-            .map_err(|_| ParseError::BodyTooshort)?;
+        let (common_frame_header, _) =
+            CommonFrameHeader::try_ref_from_prefix(remained_body.as_bytes())
+                .map_err(|_| ParseError::BodyTooshort)?;
         let frame_type = common_frame_header.frame_type;
         let frame_length = u16::from(common_frame_header.frame_length) as usize;
 
@@ -130,7 +140,7 @@ fn parse_frame<'a>(mut remained_body: &'a [u8]) -> Result<Vec<ParsedFrameVariant
 
         let current_frame = FrameType::try_from(frame_type)
             .map_err(|_| ParseError::UnsupportedFrameType(frame_type))?
-            .try_parse(current_frame)
+            .try_parse(remained_body.slice_ref(current_frame))
             .ok_or(ParseError::UnsupportedFrameType(frame_type))?;
 
         frames.push(current_frame);
@@ -140,9 +150,11 @@ fn parse_frame<'a>(mut remained_body: &'a [u8]) -> Result<Vec<ParsedFrameVariant
     Ok(frames)
 }
 
-pub fn parse_packet<'a>(packet: &'a [u8]) -> Result<ParsedPacket<'a>, ParseError> {
-    let (common_packet_header, _) =
-        CommonPacketHeader::try_ref_from_prefix(packet).map_err(|_| ParseError::PacketTooShort)?;
+pub fn parse_packet<const INFO_LENGTH: usize>(
+    packet: Bytes,
+) -> Result<ParsedPacket<INFO_LENGTH>, ParseError> {
+    let (common_packet_header, _) = CommonPacketHeader::try_ref_from_prefix(packet.as_bytes())
+        .map_err(|_| ParseError::PacketTooShort)?;
     let header_length = u16::from(common_packet_header.header_length) as usize;
     let body_length = u16::from(common_packet_header.body_length) as usize;
     if common_packet_header.version != VERSION {
@@ -169,7 +181,7 @@ pub fn parse_packet<'a>(packet: &'a [u8]) -> Result<ParsedPacket<'a>, ParseError
 
     let packet_variant = PacketType::try_from(common_packet_header.packet_type)
         .map_err(|_| ParseError::UnsupportedPacketType(common_packet_header.packet_type))?
-        .try_parse(specific_packet_header)
+        .try_parse::<INFO_LENGTH>(packet.slice_ref(specific_packet_header))
         .ok_or(ParseError::FailedToParsePacketHeader)?;
 
     KEY_RING
@@ -183,11 +195,13 @@ pub fn parse_packet<'a>(packet: &'a [u8]) -> Result<ParsedPacket<'a>, ParseError
         )
         .map_err(ParseError::Verification)?;
 
+    let remained_body = packet.slice_ref(&packet[header_length..header_length + body_length]);
+
+    let frames = parse_frame(remained_body)?;
     Ok(ParsedPacket {
-        common_packet_header,
+        pkt: packet,
         specific_packet_header: packet_variant,
-        frames: parse_frame(&packet[header_length..header_length + body_length])?,
-        verification_field,
+        frames,
     })
 }
 
@@ -197,7 +211,7 @@ mod tests {
 
     use super::*;
     use crate::constants::*;
-    use crate::protocol::key_ring::init;
+    use crate::protocol::key_ring::mock_init;
     use crate::protocol::wire::frames::{GetChunkFrameHeader, ParsedFrameVariant};
     use crate::protocol::wire::packets::current_timestamp_ms;
     use bytes::BytesMut;
@@ -208,15 +222,6 @@ mod tests {
             total_packet.extend_from_slice(&item);
         }
         total_packet.freeze()
-    }
-
-    fn mock_init() {
-        if KEY_RING.get().is_some() {
-            return;
-        }
-        const PRIKEY: &str = "fd9d88daa555f6bad0bbece8e0e4fffef190723e16aa9dfe0d18c8e4ff7a6eda";
-        const PUBKEY: &str = "4ae6629e09372dd96196f35c032fd1c5da3dfe01ca40ecf8b268d78d741e9d1c";
-        init(vec![String::from(PUBKEY)], Some(String::from(PRIKEY)));
     }
 
     #[test]
@@ -243,7 +248,8 @@ mod tests {
 
         assert!(total_packet.len() <= MTU);
 
-        let parsed_packet = parse_packet(&total_packet).unwrap();
+        let parsed_packet =
+            parse_packet::<TRANSMISSION_INFO_LENGTH>(Bytes::from(total_packet)).unwrap();
 
         if let ParsedFrameVariant::Data(data_frame) = &parsed_packet.frames[0] {
             assert_eq!(19260817, data_frame.chunk_id);
@@ -253,7 +259,6 @@ mod tests {
         } else {
             unreachable!()
         }
-        assert_eq!(parsed_packet.verification_field.len(), 8, "Should be CRC64");
     }
 
     #[test]
@@ -273,7 +278,8 @@ mod tests {
         let total_packet = build_into_bytes(packet);
         assert!(total_packet.len() <= MTU);
 
-        let parsed_packet = parse_packet(&total_packet).unwrap();
+        let parsed_packet =
+            parse_packet::<TRANSMISSION_INFO_LENGTH>(Bytes::from(total_packet)).unwrap();
 
         let current_time = current_timestamp_ms();
 
@@ -307,11 +313,11 @@ mod tests {
                 }
                 ParsedFrameVariant::GetChunk(GetChunkFrameHeader {
                     chunk_id,
-                    max_received_offset,
+                    next_receive_offset,
                     receive_window_frames,
                 }) => {
                     let expected_entry = expected.remove(&u32::from(chunk_id)).unwrap();
-                    assert_eq!(expected_entry.0, u32::from(max_received_offset));
+                    assert_eq!(expected_entry.0, u32::from(next_receive_offset));
                     assert_eq!(expected_entry.1, u32::from(receive_window_frames));
                 }
                 _ => unreachable!(),

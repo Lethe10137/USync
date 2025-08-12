@@ -8,6 +8,15 @@ use std::sync::OnceLock;
 
 pub static KEY_RING: OnceLock<KeyRing> = OnceLock::new();
 
+pub fn mock_init() {
+    if KEY_RING.get().is_some() {
+        return;
+    }
+    const PRIKEY: &str = "fd9d88daa555f6bad0bbece8e0e4fffef190723e16aa9dfe0d18c8e4ff7a6eda";
+    const PUBKEY: &str = "4ae6629e09372dd96196f35c032fd1c5da3dfe01ca40ecf8b268d78d741e9d1c";
+    init(vec![String::from(PUBKEY)], Some(String::from(PRIKEY)));
+}
+
 #[derive(Debug, Default)]
 pub struct KeyRing {
     pub public_key_rings: HashSet<VerifyingKey>,

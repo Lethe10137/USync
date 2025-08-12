@@ -58,17 +58,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_real_udp_socket_send_recv() -> std::io::Result<()> {
-        // 创建两个 socket，分别绑定到不同的端口
         let recv_addr: SocketAddr = "127.0.0.1:40001".parse().unwrap();
         let send_addr: SocketAddr = "127.0.0.1:40002".parse().unwrap();
 
         let receiver = RealUdpSocket::bind(recv_addr).await?;
         let sender = RealUdpSocket::bind(send_addr).await?;
 
-        // 要发送的数据
         let data = vec![Bytes::from_static(b"Hello, "), Bytes::from_static(b"UDP!")];
 
-        // 启动接收任务
         let recv_task = tokio::spawn(async move {
             let mut buf = vec![0u8; 1024];
             let (len, from) = receiver.recv_from(&mut buf).await.unwrap();
@@ -76,18 +73,15 @@ mod tests {
             (received.to_vec(), from)
         });
 
-        // 稍微等一下让接收端准备好
         sleep(Duration::from_millis(100)).await;
 
-        // 发送数据
         let bytes_sent = sender.send_to(&data, recv_addr).await?;
         assert_eq!(bytes_sent, b"Hello, UDP!".len());
 
-        // 获取接收结果
         let (received, from) = recv_task.await.unwrap();
 
         assert_eq!(received, b"Hello, UDP!");
-        assert_eq!(from.ip(), send_addr.ip()); // 可以比较 IP，端口可能是动态的
+        assert_eq!(from.ip(), send_addr.ip());
 
         Ok(())
     }

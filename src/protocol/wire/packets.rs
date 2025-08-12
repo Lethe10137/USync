@@ -4,7 +4,7 @@ use super::encoding::FrameExt;
 use super::frames::DataFrame;
 use super::verify::PacketVerificationData;
 use super::{Packet, SpecificPacketHeader};
-use crate::constants::{PUB_KEY_LENGTH, TRANSMISSION_INFO_LENGTH};
+use crate::constants::PUB_KEY_LENGTH;
 use crate::protocol::key_ring::KEY_RING;
 use crate::protocol::wire::frames::{GetChunkFrame, RateLimitFrame};
 use crate::protocol::wire::verify::PacketVerifyType;
@@ -35,25 +35,25 @@ pub enum PacketType {
 }
 
 impl PacketType {
-    pub(super) fn try_parse<'a>(&self, data: &'a [u8]) -> Option<ParsedPacketVariant<'a>> {
+    pub(super) fn try_parse<const INFO_LENGTH: usize>(
+        &self,
+        data: Bytes,
+    ) -> Option<ParsedPacketVariant> {
         match &self {
-            PacketType::Data => DataPacket::try_parse(data),
+            PacketType::Data => DataPacket::<INFO_LENGTH>::try_parse(data),
             PacketType::Ticket => TicketPacket::try_parse(data),
         }
     }
 }
 
 #[derive(Debug)]
-pub enum ParsedPacketVariant<'a> {
+pub enum ParsedPacketVariant {
     DataPacket(),
-    TicketPacket {
-        pub_key: &'a [u8; PUBLIC_KEY_LENGTH],
-        timestamp_ms: u64,
-    },
+    TicketPacket { pub_key: Bytes, timestamp_ms: u64 },
 }
 
-impl<'a> ParsedPacketVariant<'a> {
-    pub fn build_verification_data(
+impl ParsedPacketVariant {
+    pub fn build_verification_data<'a>(
         &'a self,
         pkt: &'a [u8],
         verification_field: &'a [u8],
@@ -82,16 +82,25 @@ impl SpecificPacketHeader for DataPacketHeader {
     }
 }
 
-pub struct DataPacket {
+pub struct DataPacket<const INFO_LENGTH: usize> {
     header: DataPacketHeader,
-    data: DataFrame<TRANSMISSION_INFO_LENGTH>, // DataFrame<12> for raptorq
+    data: DataFrame<INFO_LENGTH>, // DataFrame<12> for raptorq
 }
 
-impl DataPacket {
+impl<const INFO_LENGTH: usize> From<DataFrame<INFO_LENGTH>> for DataPacket<INFO_LENGTH> {
+    fn from(data: DataFrame<INFO_LENGTH>) -> Self {
+        Self {
+            header: DataPacketHeader {},
+            data,
+        }
+    }
+}
+
+impl<const INFO_LENGTH: usize> DataPacket<INFO_LENGTH> {
     pub fn new(
         chunk_id: u32,
         offset: u32,
-        transmission_info: [u8; TRANSMISSION_INFO_LENGTH],
+        transmission_info: [u8; INFO_LENGTH],
         data: Vec<u8>,
     ) -> Self {
         Self {
@@ -101,7 +110,7 @@ impl DataPacket {
     }
 }
 
-impl Packet for DataPacket {
+impl<const INFO_LENGTH: usize> Packet for DataPacket<INFO_LENGTH> {
     type Header = DataPacketHeader;
     const PACKET_TYPE: PacketType = PacketType::Data;
     const PACKET_VERIFICATION_TYPE: PacketVerifyType = PacketVerifyType::CRC64;
@@ -113,7 +122,7 @@ impl Packet for DataPacket {
         let built = self.data.build();
         std::iter::once(built)
     }
-    fn try_parse<'a>(data: &'a [u8]) -> Option<ParsedPacketVariant<'a>> {
+    fn try_parse(data: Bytes) -> Option<ParsedPacketVariant> {
         (data.is_empty()).then_some(ParsedPacketVariant::DataPacket())
     }
 }
@@ -168,14 +177,14 @@ impl TicketPacket {
     pub fn set_get_chunk(
         mut self,
         chunk_id: u32,
-        max_received_offset: u32,
+        next_received_offset: u32,
         receive_window: u32,
     ) -> Self {
         self.get_chunk.insert(
             chunk_id,
             GetChunkFrame {
                 chunk_id: chunk_id.into(),
-                max_received_offset: max_received_offset.into(),
+                next_receive_offset: next_received_offset.into(),
                 receive_window_frames: receive_window.into(),
             },
         );
@@ -201,15 +210,16 @@ impl Packet for TicketPacket {
 
         rate_limit.chain(get_packets)
     }
-    fn try_parse<'a>(data: &'a [u8]) -> Option<ParsedPacketVariant<'a>> {
-        let (pub_key, mut remain): (&'a [u8], &'a [u8]) = data.split_at_checked(PUB_KEY_LENGTH)?;
-        let pub_key: &'a [u8; PUB_KEY_LENGTH] = pub_key.try_into().ok()?;
+    fn try_parse(data: Bytes) -> Option<ParsedPacketVariant> {
+        let (pub_key, mut remain): (&[u8], &[u8]) =
+            data.as_bytes().split_at_checked(PUB_KEY_LENGTH)?;
+        let pub_key: &[u8; PUB_KEY_LENGTH] = pub_key.try_into().ok()?;
         let timestamp_ms = remain.try_get_u64().ok()?;
 
         remain
             .is_empty()
             .then_some(ParsedPacketVariant::TicketPacket {
-                pub_key,
+                pub_key: data.slice_ref(pub_key),
                 timestamp_ms,
             })
     }

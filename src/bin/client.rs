@@ -4,6 +4,7 @@ use directories::UserDirs;
 use humansize::{BINARY, format_size};
 use owo_colors::OwoColorize;
 use std::{fs, path::PathBuf};
+// use tokio::sync::Semaphore;
 use zerocopy::IntoBytes;
 
 use usync::util::{
@@ -79,8 +80,8 @@ fn check_file<'a>(
     );
     Ok(need_to_download)
 }
-
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let toml_str = fs::read_to_string(&args.plan_file)?;

@@ -54,7 +54,7 @@ pub trait Frame: Sized {
     fn take_body(self) -> Option<Bytes> {
         None
     }
-    fn try_parse<'a>(data: &'a [u8]) -> Option<ParsedFrameVariant<'a>>;
+    fn try_parse<const INFO_LENGTH: usize>(data: Bytes) -> Option<ParsedFrameVariant<INFO_LENGTH>>;
 }
 
 pub struct BuiltFrame {
@@ -69,5 +69,5 @@ pub trait Packet: Sized {
 
     fn get_header(&self) -> &Self::Header;
     fn get_body(self) -> impl Iterator<Item = BuiltFrame>;
-    fn try_parse<'a>(data: &'a [u8]) -> Option<ParsedPacketVariant<'a>>;
+    fn try_parse(data: Bytes) -> Option<ParsedPacketVariant>;
 }

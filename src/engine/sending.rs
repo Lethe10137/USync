@@ -1,92 +1,109 @@
-use crate::protocol::{coding::FrameSender, wire::frames::DataFrame};
-use crate::util::timer::{SenderTimer, SenderTimerOutput};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::time::Duration;
+
+use super::{BusAddress, BusInterface, BusMessage, SendingOrder};
+use crate::constants::MTU;
+use crate::protocol::coding::FrameSender;
+use crate::protocol::wire::encoding::{PacketExt, ParsedPacket, parse_packet};
+use crate::protocol::wire::frames::ParsedFrameVariant;
+use crate::protocol::wire::packets::ParsedPacketVariant;
+use crate::protocol::wire::{frames::DataFrame, packets::DataPacket};
+use crate::transmission::UdpSocketLike;
+
 use bytes::Bytes;
-use flume::{Receiver, Sender};
-use tokio::time::{Duration, Instant};
 
-use crate::util::timer_logger::print_relative_time;
+use tokio::time::Instant;
 
-pub struct SendingOrder {
-    pub chunk_id: u32,
-    pub sending_interval: Option<Duration>,
-    pub time_stamp: Instant,
-    pub offset_next: u32,
-    pub offset_no_more_than: u32,
-    pub close_now: bool,
+pub struct SendingSocket<S: UdpSocketLike, const INFO_LENGTH: usize> {
+    socket: S,
+    bus_interface: BusInterface<BusAddress, BusMessage<INFO_LENGTH>>,
 }
 
-pub struct SendingChunk<FS: FrameSender<INFO_LENGTH>, const INFO_LENGTH: usize> {
-    chunk_id: u32,
-    encoder: FS,
-    transmission_info: [u8; INFO_LENGTH],
-    order_receiver: Receiver<SendingOrder>,
-    data_sender: Sender<DataFrame<INFO_LENGTH>>,
-    max_frame_offset: u32,
-    max_sent_offset: u32,
-    timer: SenderTimer,
-}
+fn build_sending_order<const INFO_LENGTH: usize>(
+    packet: ParsedPacket<INFO_LENGTH>,
+    socket_addr: SocketAddr,
+) -> Option<HashMap<BusAddress, SendingOrder>> {
+    let ParsedPacketVariant::TicketPacket { .. } = packet.specific_packet_header else {
+        return None;
+    };
+    let mut orders = HashMap::new();
+    let mut sending_interval = None;
+    for frame in packet.frames {
+        match frame {
+            ParsedFrameVariant::GetChunk(header) => {
+                let chunk_id: u32 = header.chunk_id.into();
+                let next_recieve: u32 = header.next_receive_offset.into();
+                let receive_window: u32 = header.receive_window_frames.into();
 
-impl<FS: FrameSender<INFO_LENGTH>, const INFO_LENGTH: usize> SendingChunk<FS, INFO_LENGTH> {
-    pub fn new(
-        chunk_data: &[u8],
-        start_order: SendingOrder,
-        order_receiver: Receiver<SendingOrder>,
-        data_sender: Sender<DataFrame<INFO_LENGTH>>,
-    ) -> Self {
-        print_relative_time("Start init sender", Instant::now());
-        let encoder = FS::init(chunk_data, start_order.offset_next);
-        let transmission_info = encoder.get_trasmission_info();
-        let sender = Self {
-            chunk_id: start_order.chunk_id,
-            encoder,
-            transmission_info,
-            order_receiver,
-            data_sender,
-            timer: SenderTimer::new(
-                start_order
-                    .sending_interval
-                    .unwrap_or(Duration::from_millis(20)),
-            ),
-            max_sent_offset: 0,
-            max_frame_offset: start_order.offset_next + start_order.offset_no_more_than,
-        };
-        print_relative_time("Finish init sender", Instant::now());
-        sender
+                let order = SendingOrder {
+                    chunk_id,
+                    sending_interval,
+                    time_stamp: Instant::now(),
+                    offset_next: next_recieve,
+                    offset_no_more_than: next_recieve + receive_window,
+                    close_now: receive_window == 0,
+                };
+                orders.insert(BusAddress::FrameEncoder(chunk_id, socket_addr), order);
+            }
+            ParsedFrameVariant::RateLimit(header) => {
+                let rate_limit = u32::from(header.desired_max_kbps);
+                sending_interval = Duration::from_millis(8)
+                    .mul_f32((MTU + 20) as f32)
+                    .div_f64(rate_limit as f64)
+                    .into();
+            }
+            _ => {}
+        }
     }
 
-    pub async fn run(&mut self) {
+    orders.into()
+}
+
+impl<S: UdpSocketLike, const INFO_LENGTH: usize> SendingSocket<S, INFO_LENGTH> {
+    pub fn new(
+        socket: S,
+        bus_interface: BusInterface<BusAddress, BusMessage<INFO_LENGTH>>,
+    ) -> Self {
+        Self {
+            socket,
+            bus_interface,
+        }
+    }
+
+    pub async fn run<FS>(mut self)
+    where
+        FS: FrameSender<INFO_LENGTH> + Send + 'static,
+    {
+        let mut buffer = [0u8; 65537];
         loop {
             tokio::select! {
-                Ok(order) = self.order_receiver.recv_async() => {
-                    let now = Instant::now();
-                    print_relative_time("ORDER", now);
-                    // self.timer.set_rate(, new_interval);
-                    self.timer.set_rate(now, order.sending_interval);
-                    if order.close_now {
-                        print_relative_time("FINISH", now);
-                        break;
+                Ok((length, sock_addr)) = self.socket.recv_from(&mut buffer) => {
+                    let packet = Bytes::from(Vec::from(&buffer[0..length]));
+                    if let Some(parsed_packet) = parse_packet::<INFO_LENGTH>(packet)
+                        .inspect_err(|err| {dbg!(err);})
+                        .ok().map(
+                        |parsed_packet| build_sending_order(parsed_packet, sock_addr).into_iter().flatten()
+                    ){
+                        for (addr, order) in parsed_packet.into_iter(){
+                            if let Err(order) = self.bus_interface.send(addr.clone(), order).await{
+                                let start_order = order.unwrap();
+                                if start_order.close_now {continue;}
+                                eprintln!("Init encoder for chunk {:?}, addr {:?}", start_order.chunk_id, &addr);
+                                let bus = self.bus_interface.get_bus();
+                                super::encoding::spawn::<FS, INFO_LENGTH>(start_order, bus, sock_addr, addr).await;
+                            }
+                        }
                     }
                 },
 
-                output = &mut self.timer => {
-                    match output {
-                        SenderTimerOutput::Send(x) => {
-                            for _ in 0..x{
-                                if self.max_sent_offset >= self.max_frame_offset {break;}
-                                let (frame_offset, frame) = self.encoder.next_frame();
-                                if self.data_sender.send_async(DataFrame::new(self.chunk_id, frame_offset, self.transmission_info, Bytes::from(frame))).await.is_err(){
-                                    print_relative_time("Can not send", Instant::now());
-                                    break;
-                                }
-                                print_relative_time(format!("Send {frame_offset}").as_str(), Instant::now());
-                                self.max_sent_offset = frame_offset;
-                            }
-                        },
-                        SenderTimerOutput::Close => {
-                            print_relative_time("CLOSE", Instant::now());
-                            break;
-                        }
-                    };
+                Some((addr, frame)) = self.bus_interface.recv::<(SocketAddr, DataFrame<INFO_LENGTH>)>() => {
+                    let packet = DataPacket::from(frame).build();
+                    self.socket.send_to(packet.as_slice(), addr).await.ok();
+                },
+
+                else => {
+                    break;
                 }
             }
         }

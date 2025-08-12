@@ -1,8 +1,26 @@
 use memmap2::{Mmap, MmapOptions};
+use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind, Result};
 use std::os::unix::fs::FileExt;
 use std::path::Path;
+use std::sync::OnceLock;
+
+pub struct ChunkIndex {
+    pub files: HashMap<usize, OsString>,
+    pub chunks: HashMap<u32, (usize, u64, usize)>, // (file, offset, length)
+}
+
+impl ChunkIndex {
+    pub fn get(&self, index: u32) -> Option<(&OsString, u64, usize)> {
+        self.chunks.get(&index).and_then(|(file, offset, length)| {
+            self.files.get(file).map(|file| (file, *offset, *length))
+        })
+    }
+}
+
+pub static CHUNK_INDEX: OnceLock<ChunkIndex> = OnceLock::new();
 
 pub fn sanity_check<P: AsRef<Path>>(path: P) -> Result<(u64, String)> {
     let length = std::fs::metadata(&path)?.len();

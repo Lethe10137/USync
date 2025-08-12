@@ -129,12 +129,12 @@ mod test {
                         match output {
                             SenderTimerOutput::Send(x) => {
                                 for _ in 0..x {
-                                    sent_times.push(print_relative_time(format!("send {}", cnt).as_str(), Instant::now()) / 100.0);
+                                    sent_times.push(print_relative_time(0, format!("send {}", cnt).as_str(), Instant::now()) / 100.0);
                                     cnt += 1;
                                 }
                             },
                             SenderTimerOutput::Close => {
-                                sent_times.push(print_relative_time("CLOSE", Instant::now()) / 100.0);
+                                sent_times.push( print_relative_time(0, "CLOSE", Instant::now()) / 100.0);
                                 break;
                             }
                         };
