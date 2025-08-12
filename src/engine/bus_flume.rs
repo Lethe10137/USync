@@ -36,7 +36,7 @@ where
             let address = entry.key();
             let sender = entry.value();
             let len = sender.len();
-            eprintln!("Address: {:?}, unread count: {}", address, len);
+            eprintln!("Address: {address:?}, unread count: {len}");
         }
     }
 

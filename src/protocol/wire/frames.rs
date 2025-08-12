@@ -67,7 +67,7 @@ fn preview_bytes(bytes: &Bytes) -> String {
     let preview: Vec<String> = bytes
         .iter()
         .take(preview_len)
-        .map(|b| format!("{:02x}", b))
+        .map(|b| format!("{b:02x}"))
         .collect();
     format!(
         "[{} bytes: {}{}]",
