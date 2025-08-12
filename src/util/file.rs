@@ -39,7 +39,7 @@ pub fn sanity_check<P: AsRef<Path>>(path: P) -> Result<(u64, String)> {
     Ok((length, file_name))
 }
 
-pub fn check_file_exist<P: AsRef<Path>>(path: P) -> Result<bool> {
+pub fn check_file_exist_create<P: AsRef<Path>>(path: P) -> Result<bool> {
     let path = path.as_ref();
     if path.exists() {
         if path.is_file() {
@@ -50,6 +50,18 @@ pub fn check_file_exist<P: AsRef<Path>>(path: P) -> Result<bool> {
     }
     File::create(path)?;
     Ok(false)
+}
+
+pub fn check_file_exist<P: AsRef<Path>>(path: P) -> Result<()> {
+    let path = path.as_ref();
+    if path.exists() {
+        if path.is_file() {
+            return Ok(());
+        } else {
+            return Err(Error::other("The path to downloading file is not a file!"));
+        }
+    }
+    Err(Error::other("No such file or directory"))
 }
 
 pub fn mmap_segment<P: AsRef<Path>>(path: P, offset: u64, length: usize) -> Result<Mmap> {

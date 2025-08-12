@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::constants::{CHUNK_SIZE, DEFAULT_PAGE_SIZE};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FileChunk {
     pub chunk_id: usize,
     pub hash: String,

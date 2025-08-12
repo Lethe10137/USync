@@ -3,14 +3,20 @@ use clap::Parser;
 use directories::UserDirs;
 use humansize::{BINARY, format_size};
 use owo_colors::OwoColorize;
-use std::{fs, path::PathBuf};
-// use tokio::sync::Semaphore;
-use zerocopy::IntoBytes;
-
+use std::str::FromStr;
+use std::sync::{Arc, atomic::AtomicUsize};
+use std::{fs, net::SocketAddr, path::PathBuf};
+use tokio::sync::Semaphore;
+use tokio::time::Duration;
+use usync::constants::TRANSMISSION_INFO_LENGTH;
+use usync::engine::{Bus, BusAddress, BusMessage, decoding, receiving};
+use usync::protocol::{coding::raptorq_code::RaptorqReceiver, init};
+use usync::transmission::real::RealUdpSocket;
 use usync::util::{
-    file::{check_file_exist, mmap_segment},
+    file::{check_file_exist_create, mmap_segment, write_at},
     plan::{FileChunk, FileConfig},
 };
+use zerocopy::IntoBytes;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Client for receiving file", long_about = None)]
@@ -18,6 +24,14 @@ struct Args {
     /// The path to the plan file (TOML format).
     #[arg(short, long, value_name = "PLAN_FILE")]
     plan_file: PathBuf,
+
+    /// Socket Addr of Server
+    #[arg(short, long, value_name = "SERVER")]
+    server: SocketAddr,
+
+    /// Private Key
+    #[arg(short, long, value_name = "PRI_KEY")]
+    private_key: String,
 
     /// The path to the downloading file (optional, in your download folder as default).
     #[arg(short, long, value_name = "DOWNLOADING_FILE")]
@@ -82,7 +96,15 @@ fn check_file<'a>(
 }
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    debug_assert!(
+        false,
+        "Run in release mode instead for raptorq is too slow in debug mode."
+    );
+
     let args = Args::parse();
+
+    // Init key ring.
+    init(vec![], Some(args.private_key));
 
     let toml_str = fs::read_to_string(&args.plan_file)?;
     let config: FileConfig = toml::from_str(&toml_str)?;
@@ -102,7 +124,7 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Downloading file: {}", downloading_file.display());
 
-    if check_file_exist(&downloading_file)? {
+    if check_file_exist_create(&downloading_file)? {
         println!("{} already exists.", downloading_file.display(),);
     } else {
         println!(
@@ -111,7 +133,69 @@ async fn main() -> anyhow::Result<()> {
         )
     }
 
-    let _need_to_download = check_file(&downloading_file, &config)?;
+    let bus: Arc<Bus<BusAddress, BusMessage<TRANSMISSION_INFO_LENGTH>>> = Arc::new(Bus::default());
+    let socket = RealUdpSocket::bind(SocketAddr::from_str("127.0.0.1:0").unwrap())
+        .await
+        .unwrap();
+    let receiver =
+        receiving::ReceivingSocket::new(socket, bus.clone().register(BusAddress::ReceiverSocket));
+    tokio::spawn(receiver.run(args.server));
+
+    let need_to_download = check_file(&downloading_file, &config)?;
+
+    let semaphore = Arc::new(Semaphore::new(8));
+    let finish = Arc::new(AtomicUsize::new(need_to_download.len()));
+
+    for to_download in need_to_download {
+        let to_download = to_download.clone();
+        let semaphore = semaphore.clone();
+        let bus = bus.clone();
+        let finish = finish.clone();
+        let downloading_file = downloading_file.clone();
+
+        let chunk_id = to_download.chunk_id as u32;
+
+        let waiting = |finish: Arc<AtomicUsize>| async move {
+            let permit = semaphore.acquire().await.unwrap();
+            let result =
+                decoding::spawn::<RaptorqReceiver, TRANSMISSION_INFO_LENGTH>(chunk_id, bus.clone())
+                    .await;
+
+            drop(permit);
+            let Ok(Some(result)) = result else {
+                eprintln!(
+                    "Downloaded chunk {} currupted.",
+                    to_download.chunk_id.on_red(),
+                );
+                finish.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                return;
+            };
+
+            let hash = hex::encode(blake3::hash(&result).as_bytes());
+            if hash == to_download.hash && result.len() == to_download.length {
+                write_at(downloading_file, to_download.offset, &result).ok();
+                eprintln!(
+                    "Succeed in download chunk {}, at [{},{})",
+                    to_download.chunk_id.green(),
+                    to_download.offset.magenta(),
+                    (to_download.offset + to_download.length as u64).magenta()
+                )
+            } else {
+                eprintln!(
+                    "Downloaded chunk {} currupted.",
+                    to_download.chunk_id.on_red(),
+                )
+            }
+
+            finish.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        };
+        tokio::spawn(waiting(finish));
+    }
+
+    while finish.load(std::sync::atomic::Ordering::Relaxed) > 0 {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        bus.debug();
+    }
 
     Ok(())
 }
