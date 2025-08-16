@@ -134,7 +134,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let bus: Arc<Bus<BusAddress, BusMessage<TRANSMISSION_INFO_LENGTH>>> = Arc::new(Bus::default());
-    let socket = RealUdpSocket::bind(SocketAddr::from_str("127.0.0.1:0").unwrap())
+    let socket = RealUdpSocket::bind(SocketAddr::from_str("0.0.0.0:0").unwrap())
         .await
         .unwrap();
     let receiver =

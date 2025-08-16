@@ -84,8 +84,8 @@ impl<S: UdpSocketLike, const INFO_LENGTH: usize> ReceivingSocket<S, INFO_LENGTH>
                     eprintln!("{}", "Tick".yellow());
                     if !reporter.is_empty() {
                         let packet = reporter.generate(40960).build(); // 40Mbps
-                        if self.socket.send_to(packet.as_slice(), server_addr).await.is_err(){
-                            eprintln!("{}", "Failed to send report to server!".red());
+                        if let Err(e) = self.socket.send_to(packet.as_slice(), server_addr).await {
+                            eprintln!("{e} {}", "Failed to send report to server!".red());
                             break;
                         }
                     }
