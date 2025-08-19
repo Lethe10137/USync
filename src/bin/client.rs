@@ -14,6 +14,7 @@ use usync::protocol::{coding::raptorq_code::RaptorqReceiver, init};
 use usync::transmission::real::RealUdpSocket;
 use usync::util::{
     file::{check_file_exist_create, mmap_segment, write_at},
+    log::init as init_log,
     plan::{FileChunk, FileConfig},
 };
 use zerocopy::IntoBytes;
@@ -142,6 +143,8 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(receiver.run(args.server));
 
     let need_to_download = check_file(&downloading_file, &config)?;
+
+    init_log("download.log".into());
 
     let semaphore = Arc::new(Semaphore::new(8));
     let finish = Arc::new(AtomicUsize::new(need_to_download.len()));

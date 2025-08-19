@@ -3,6 +3,8 @@ pub mod plan;
 pub mod timer;
 pub mod timer_logger;
 
+pub mod log;
+
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::Instant;
 

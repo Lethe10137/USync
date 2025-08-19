@@ -7,6 +7,7 @@ use crate::protocol::wire::{
     BuiltFrame, CommonFrameHeader, CommonPacketHeader, Frame, FrameType, Packet, PacketType,
     ParsedFrameVariant, ParsedPacketVariant, SpecificFrameHeader, verify::PacketVerificationError,
 };
+use crate::util::log::packet_log;
 
 use zerocopy::{FromBytes, Immutable, IntoBytes, TryFromBytes, Unaligned};
 
@@ -18,7 +19,7 @@ pub trait RawParts: IntoBytes + FromBytes + Unaligned + Sized + Immutable {
 impl<T> RawParts for T where T: IntoBytes + FromBytes + Unaligned + Immutable {}
 
 pub(crate) trait PacketExt: Packet {
-    fn build(self) -> Vec<Bytes> {
+    fn build(self) -> (Vec<Bytes>, u32) {
         let header_length = (
             CommonPacketHeader::raw_len(),
             <Self as Packet>::Header::raw_len(),
@@ -47,6 +48,7 @@ pub(crate) trait PacketExt: Packet {
             body_length: (body_length as u16).into(),
             packet_id: super::new_packet_id().into(),
         };
+        let packet_id = packet_header.packet_id;
 
         let mut common_header = BytesMut::with_capacity(header_length.0);
         common_header.extend_from_slice(packet_header.as_bytes());
@@ -59,7 +61,7 @@ pub(crate) trait PacketExt: Packet {
             result.iter().map(|pkt| pkt.as_bytes()),
         );
         result.push(signature);
-        result
+        (result, u32::from(packet_id))
     }
 }
 impl<T: Packet> PacketExt for T {}
@@ -169,8 +171,8 @@ pub fn parse_packet<const INFO_LENGTH: usize>(
         &packet[header_length + body_length..]
     };
 
-    // Todo: LOG here!
-    let _packet_id = u32::from(common_packet_header.packet_id);
+    // LOG here!
+    packet_log(u32::from(common_packet_header.packet_id), 0x19260817);
 
     let specific_packet_header = if header_length < CommonPacketHeader::raw_len() {
         eprintln!("Insane packet header length");
@@ -213,7 +215,7 @@ mod tests {
     use crate::constants::*;
     use crate::protocol::key_ring::mock_init;
     use crate::protocol::wire::frames::{GetChunkFrameHeader, ParsedFrameVariant};
-    use crate::protocol::wire::packets::current_timestamp_ms;
+    use crate::util::log::current_timestamp_ms;
     use bytes::BytesMut;
 
     fn build_into_bytes(vec: Vec<Bytes>) -> Bytes {
@@ -236,7 +238,7 @@ mod tests {
             [7u8; TRANSMISSION_INFO_LENGTH],
             mock_data.clone(),
         );
-        let built = data_packet.build();
+        let built = data_packet.build().0;
 
         let total_packet = build_into_bytes(built);
 
@@ -275,7 +277,7 @@ mod tests {
             .set_get_chunk(8, 234, 600)
             .build();
 
-        let total_packet = build_into_bytes(packet);
+        let total_packet = build_into_bytes(packet.0);
         assert!(total_packet.len() <= MTU);
 
         let parsed_packet =

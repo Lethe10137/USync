@@ -8,21 +8,13 @@ use crate::constants::PUB_KEY_LENGTH;
 use crate::protocol::key_ring::KEY_RING;
 use crate::protocol::wire::frames::{GetChunkFrame, RateLimitFrame};
 use crate::protocol::wire::verify::PacketVerifyType;
+use crate::util::log::current_timestamp_ms;
 
 use bytes::{Buf, Bytes};
 use ed25519_dalek::PUBLIC_KEY_LENGTH;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use zerocopy::{BigEndian, FromBytes, Immutable, IntoBytes, KnownLayout, U64, Unaligned};
-
-use std::time::{SystemTime, UNIX_EPOCH};
-
-pub fn current_timestamp_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_millis() as u64
-}
 
 #[repr(u8)]
 #[derive(

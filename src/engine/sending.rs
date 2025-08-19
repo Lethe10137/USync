@@ -10,6 +10,7 @@ use crate::protocol::wire::frames::ParsedFrameVariant;
 use crate::protocol::wire::packets::ParsedPacketVariant;
 use crate::protocol::wire::{frames::DataFrame, packets::DataPacket};
 use crate::transmission::UdpSocketLike;
+use crate::util::log::packet_log;
 
 use bytes::Bytes;
 
@@ -98,8 +99,9 @@ impl<S: UdpSocketLike, const INFO_LENGTH: usize> SendingSocket<S, INFO_LENGTH> {
                 },
 
                 Some((addr, frame)) = self.bus_interface.recv::<(SocketAddr, DataFrame<INFO_LENGTH>)>() => {
-                    let packet = DataPacket::from(frame).build();
+                    let (packet, packet_id) = DataPacket::from(frame).build();
                     self.socket.send_to(packet.as_slice(), addr).await.ok();
+                    packet_log(packet_id, 0x20250819);
                 },
 
                 else => {

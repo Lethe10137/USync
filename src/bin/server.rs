@@ -13,6 +13,7 @@ use usync::protocol::{coding::raptorq_code::RaptorqSender, init};
 use usync::transmission::real::RealUdpSocket;
 use usync::util::{
     file::{CHUNK_INDEX, ChunkIndex, check_file_exist},
+    log::init as init_log,
     plan::FileConfig,
 };
 
@@ -73,6 +74,8 @@ async fn main() -> anyhow::Result<()> {
         })
         .map_err(|_| "Failed to init OnceLock")
         .unwrap();
+
+    init_log("upload.log".into());
 
     let bus: Arc<Bus<BusAddress, BusMessage<TRANSMISSION_INFO_LENGTH>>> = Arc::new(Bus::default());
     let socket = RealUdpSocket::bind(args.listening).await.unwrap();

@@ -74,7 +74,7 @@ impl<S: UdpSocketLike, const INFO_LENGTH: usize> ReceivingSocket<S, INFO_LENGTH>
     pub async fn run(mut self, server_addr: SocketAddr) {
         let mut buffer = [0u8; 65537];
         let mut reporter = Reporter::default();
-        let mut ticker = interval(Duration::from_secs(2));
+        let mut ticker = interval(Duration::from_secs(1));
 
         loop {
             tokio::select! {
@@ -83,7 +83,7 @@ impl<S: UdpSocketLike, const INFO_LENGTH: usize> ReceivingSocket<S, INFO_LENGTH>
                 _ = ticker.tick() => {
                     eprintln!("{}", "Tick".yellow());
                     if !reporter.is_empty() {
-                        let packet = reporter.generate(40960).build(); // 40Mbps
+                        let packet = reporter.generate(40960).build().0; // 40Mbps
                         if let Err(e) = self.socket.send_to(packet.as_slice(), server_addr).await {
                             eprintln!("{e} {}", "Failed to send report to server!".red());
                             break;

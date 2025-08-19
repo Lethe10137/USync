@@ -17,6 +17,7 @@ use usync::transmission::mock::MockSocket;
 use usync::util::{
     file::{CHUNK_INDEX, write_at},
     generate_random,
+    log::init as init_log,
 };
 
 const CONCURRENCY: usize = 10;
@@ -31,6 +32,8 @@ async fn main() {
     );
     use tempfile::NamedTempFile;
     let mut file = NamedTempFile::new().unwrap();
+
+    init_log("localtest.log".into());
 
     let data = generate_random(CHUNK_SIZE);
     let expected_hash = blake3::hash(&data);
